@@ -11,3 +11,7 @@ auto-example-env = "main:main"
 
 [tool.setuptools]
 py-modules = ["main"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
