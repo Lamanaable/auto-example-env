@@ -3,7 +3,7 @@ name = "auto-example-env"
 version = "0.1.0"
 description = "Generate example.env from .env file for documentation purposes"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.8"
 dependencies = []
 
 [project.scripts]
