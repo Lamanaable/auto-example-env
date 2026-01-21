@@ -5,7 +5,7 @@ A Python utility to generate `example.env` from your `.env` file for documentati
 ## Installation
 
 ```bash
-pip install .
+pip install auto-example-env
 ```
 
 ## Usage
@@ -45,4 +45,3 @@ export API_KEY=
 # Multiline value
 export CERT=
 ```
-
