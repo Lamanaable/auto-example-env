@@ -41,22 +41,21 @@ jobs:
         run: pip install build
       - name: Build package
         run: python -m build
-      - name: Store build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
 
   publish:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: dist
-          path: dist/
+          python-version: "3.12"
+      - name: Install build dependencies
+        run: pip install build
+      - name: Build package
+        run: python -m build
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
