@@ -13,16 +13,13 @@ auto-example-env = "main:main"
 py-modules = ["main"]
 
 [build-system]
-requires = ["uv_build<0.12"]
-build-backend = "uv_build"
-
-[project.optional-dependencies]
-build = ["uv"]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 commit_message = "chore(release): bump version to {version}"
 build_command = """
-    python -m pip install -e '.[build]'
-    uv build
+    python -m pip install build
+    python -m build
 """
