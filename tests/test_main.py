@@ -48,6 +48,34 @@ class TestParseEnvLines(unittest.TestCase):
         result = parse_env_lines(lines)
         self.assertEqual(result, ["export KEY=\n", "\n", "\n"])
 
+    def test_single_line_without_export(self):
+        lines = ["API_KEY=secret123\n"]
+        result = parse_env_lines(lines)
+        self.assertEqual(result, ["API_KEY=\n"])
+
+    def test_ignore_line_without_export(self):
+        lines = ["SECRET=hidden # ignore\n"]
+        result = parse_env_lines(lines)
+        self.assertEqual(result, [])
+
+    def test_mixed_export_and_non_export(self):
+        lines = ["export KEY1=value1\n", "KEY2=value2\n", "export KEY3=value3\n"]
+        result = parse_env_lines(lines)
+        self.assertEqual(result, ["export KEY1=\n", "KEY2=\n", "export KEY3=\n"])
+
+    def test_multiline_without_export(self):
+        lines = [
+            'SSL_CERT="-----BEGIN CERTIFICATE-----\n',
+            '-----END CERTIFICATE-----"\n',
+        ]
+        result = parse_env_lines(lines)
+        self.assertEqual(result, ["# Multiline value\n", "SSL_CERT=\n"])
+
+    def test_non_key_value_line_preserved(self):
+        lines = ["SOME_RANDOM_TEXT\n"]
+        result = parse_env_lines(lines)
+        self.assertEqual(result, ["SOME_RANDOM_TEXT\n"])
+
 
 class TestMergeWithExistingExample(unittest.TestCase):
     def test_preserve_placeholder_values(self):
@@ -106,6 +134,32 @@ class TestMergeWithExistingExample(unittest.TestCase):
             "export DB_URL=your_database_url\n",
         ]
         self.assertEqual(result, expected)
+
+    def test_merge_preserves_non_export_format(self):
+        env_lines = ["API_KEY=secret\n", "DB_URL=postgres://localhost\n"]
+        example_lines = ["API_KEY=your_api_key\n", "DB_URL=your_database_url\n"]
+
+        result = merge_with_existing_example(env_lines, example_lines)
+
+        self.assertEqual(result, ["API_KEY=your_api_key\n", "DB_URL=your_database_url\n"])
+
+    def test_merge_mixed_formats(self):
+        env_lines = ["export API_KEY=secret\n", "DB_URL=postgres://localhost\n"]
+        example_lines = ["export API_KEY=your_api_key\n", "DB_URL=your_database_url\n"]
+
+        result = merge_with_existing_example(env_lines, example_lines)
+
+        self.assertEqual(result, ["export API_KEY=your_api_key\n", "DB_URL=your_database_url\n"])
+
+    def test_merge_cross_format_placeholders(self):
+        """Placeholders should match by key regardless of export prefix differences"""
+        env_lines = ["export API_KEY=secret\n", "DB_URL=postgres://localhost\n"]
+        example_lines = ["API_KEY=your_api_key\n", "export DB_URL=your_database_url\n"]
+
+        result = merge_with_existing_example(env_lines, example_lines)
+
+        # Output follows env format: export API_KEY=... and DB_URL=...
+        self.assertEqual(result, ["export API_KEY=your_api_key\n", "DB_URL=your_database_url\n"])
 
 
 class TestCreateExampleEnv(unittest.TestCase):
@@ -166,6 +220,57 @@ class TestCreateExampleEnv(unittest.TestCase):
         finally:
             os.unlink(env_path)
             os.unlink(example_path)
+
+    def test_creates_example_without_export(self):
+        """Test creating example.env from .env without export prefixes"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".env", delete=False
+        ) as env_file:
+            env_file.write("API_KEY=secret\n")
+            env_file.write("DB_URL=postgres://localhost\n")
+            env_path = env_file.name
+
+        example_path = env_path.replace(".env", ".example.env")
+
+        try:
+            success = create_example_env(env_path, example_path)
+            self.assertTrue(success)
+
+            with open(example_path, "r") as f:
+                content = f.read()
+
+            self.assertIn("API_KEY=\n", content)
+            self.assertIn("DB_URL=\n", content)
+            self.assertNotIn("export", content)
+        finally:
+            os.unlink(env_path)
+            if os.path.exists(example_path):
+                os.unlink(example_path)
+
+    def test_creates_example_mixed(self):
+        """Test creating example.env from .env with mixed export and non-export lines"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".env", delete=False
+        ) as env_file:
+            env_file.write("export API_KEY=secret\n")
+            env_file.write("DB_URL=postgres://localhost\n")
+            env_path = env_file.name
+
+        example_path = env_path.replace(".env", ".example.env")
+
+        try:
+            success = create_example_env(env_path, example_path)
+            self.assertTrue(success)
+
+            with open(example_path, "r") as f:
+                content = f.read()
+
+            self.assertIn("export API_KEY=\n", content)
+            self.assertIn("DB_URL=\n", content)
+        finally:
+            os.unlink(env_path)
+            if os.path.exists(example_path):
+                os.unlink(example_path)
 
 
 if __name__ == "__main__":

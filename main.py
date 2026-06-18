@@ -16,6 +16,7 @@ def parse_env_lines(lines: list[str]) -> list[str]:
     output = []
     in_multiline = False
     multiline_key = None
+    multiline_has_export = False
 
     for line in lines:
         stripped = line.rstrip()  # keep leading spaces but strip trailing
@@ -37,55 +38,62 @@ def parse_env_lines(lines: list[str]) -> list[str]:
             # Continue until closing quote
             if '"' in stripped:
                 in_multiline = False
+                prefix = "export " if multiline_has_export else ""
                 output.append("# Multiline value\n")
-                output.append(f"export {multiline_key}=\n")
+                output.append(f"{prefix}{multiline_key}=\n")
             continue
 
-        # Look for export KEY=...
-        if stripped.startswith("export "):
+        # Look for KEY=VALUE (with or without export prefix)
+        if "=" in stripped and not stripped.startswith("#"):
             parts = stripped.split("=", 1)
+            key_part = parts[0].strip()
+            has_export = key_part.startswith("export ")
+            key = key_part.replace("export ", "")
             if len(parts) == 2:
-                key_part = parts[0].strip()
                 value_part = parts[1].strip()
                 if value_part.startswith('"') and not value_part.endswith('"'):
                     # Start of multiline
                     in_multiline = True
-                    multiline_key = key_part.replace("export ", "")
+                    multiline_key = key
+                    multiline_has_export = has_export
                     continue
                 else:
                     # Single line
-                    output.append(f"{key_part}=\n")
+                    prefix = "export " if has_export else ""
+                    output.append(f"{prefix}{key}=\n")
             else:
-                # Malformed export line, keep as is
+                # Malformed line, keep as is
                 output.append(line)
         else:
-            # Non-export lines, keep as is
+            # Non-key-value lines, keep as is
             output.append(line)
 
     return output
 
 
 def extract_key(line: str) -> str | None:
-    """Extract the key from an export line."""
+    """Extract the key from a key=value line (with or without export prefix)."""
     stripped = line.strip()
-    if stripped.startswith("export "):
-        parts = stripped.split("=", 1)
-        if len(parts) >= 1:
-            key_part = parts[0].strip()
-            return key_part.replace("export ", "")
+    if "=" not in stripped or stripped.startswith("#"):
+        return None
+    parts = stripped.split("=", 1)
+    if len(parts) >= 1:
+        key_part = parts[0].strip()
+        return key_part.replace("export ", "")
     return None
 
 
 def extract_key_value(line: str) -> tuple[str, str] | None:
-    """Extract the key and value from an export line."""
+    """Extract the key and value from a key=value line (with or without export prefix)."""
     stripped = line.strip()
-    if stripped.startswith("export "):
-        parts = stripped.split("=", 1)
-        if len(parts) >= 1:
-            key_part = parts[0].strip()
-            key = key_part.replace("export ", "")
-            value = parts[1] if len(parts) > 1 else ""
-            return (key, value)
+    if "=" not in stripped or stripped.startswith("#"):
+        return None
+    parts = stripped.split("=", 1)
+    if len(parts) >= 1:
+        key_part = parts[0].strip()
+        key = key_part.replace("export ", "")
+        value = parts[1] if len(parts) > 1 else ""
+        return (key, value)
     return None
 
 
@@ -108,6 +116,7 @@ def merge_with_existing_example(
     output = []
     in_multiline = False
     multiline_key = None
+    multiline_has_export = False
 
     for line in env_lines:
         # Use original line for output to preserve formatting
@@ -126,15 +135,17 @@ def merge_with_existing_example(
         if in_multiline:
             if '"' in stripped:
                 in_multiline = False
+                prefix = "export " if multiline_has_export else ""
                 output.append("# Multiline value\n")
-                output.append(f"export {multiline_key}=\n")
+                output.append(f"{prefix}{multiline_key}=\n")
             continue
 
-        # Check if this is an export line
-        if stripped.startswith("export "):
+        # Check if this is a key=value line (with or without export prefix)
+        if "=" in stripped and not stripped.startswith("#"):
             parts = stripped.split("=", 1)
             if len(parts) >= 1:
                 key_part = parts[0].strip()
+                has_export = key_part.startswith("export ")
                 key = key_part.replace("export ", "")
 
                 # Check if we have more parts (i.e., there's a value)
@@ -145,6 +156,7 @@ def merge_with_existing_example(
                         # Start of multiline
                         in_multiline = True
                         multiline_key = key
+                        multiline_has_export = has_export
                         continue
 
                 # Single line - check if we have a placeholder
@@ -153,9 +165,11 @@ def merge_with_existing_example(
                     # Ensure placeholder ends with newline
                     if not placeholder_value.endswith("\n"):
                         placeholder_value += "\n"
-                    output.append(f"export {key}={placeholder_value}")
+                    prefix = "export " if has_export else ""
+                    output.append(f"{prefix}{key}={placeholder_value}")
                 else:
-                    output.append(f"export {key}=\n")
+                    prefix = "export " if has_export else ""
+                    output.append(f"{prefix}{key}=\n")
             else:
                 output.append(line)
         else:
